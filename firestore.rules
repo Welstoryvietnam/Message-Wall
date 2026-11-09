@@ -1,0 +1,154 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1 & Phase 4.1: Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'Happyendpu@gmail.com'
+      );
+    }
+
+    // Pillar 2: Validation Blueprint for MemoryNote (synced verbatim with firebase-blueprint.json)
+    function isValidMemoryNote(data) {
+      return data.keys().hasAll([
+          'parentName',
+          'childName',
+          'department',
+          'familyIcon',
+          'noteColor',
+          'topic',
+          'promptUsed',
+          'message',
+          'photoData',
+          'photoCaption',
+          'heartsCount',
+          'authorUid',
+          'visibility',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'parentName',
+          'childName',
+          'department',
+          'familyIcon',
+          'noteColor',
+          'topic',
+          'promptUsed',
+          'message',
+          'photoData',
+          'photoCaption',
+          'heartsCount',
+          'authorUid',
+          'visibility',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.parentName is string && data.parentName.size() >= 1 && data.parentName.size() <= 80
+        && data.childName is string && data.childName.size() >= 1 && data.childName.size() <= 80
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 80
+        && data.familyIcon is string && data.familyIcon.size() >= 1 && data.familyIcon.size() <= 30
+        && data.familyIcon in ['chef-family', 'sunshine-home', 'happy-bears', 'star-sprout', 'heart-hands', 'rainbow-kids']
+        && data.noteColor is string && data.noteColor.size() >= 1 && data.noteColor.size() <= 20
+        && data.noteColor in ['butter', 'peach', 'mint', 'sky', 'lavender', 'rose']
+        && data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 30
+        && data.topic in ['ky-niem-dep', 'loi-nhan-vien', 'loi-con-noi', 'cam-on-btc']
+        && data.promptUsed is string && data.promptUsed.size() <= 200
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 1000
+        && data.photoData is string && data.photoData.size() <= 700000
+        && data.photoCaption is string && data.photoCaption.size() <= 140
+        && (data.heartsCount is int || data.heartsCount is number) && data.heartsCount >= 0 && data.heartsCount <= 1000000
+        && data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128
+        && data.authorUid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.visibility is string && data.visibility.size() >= 6 && data.visibility.size() <= 10
+        && data.visibility == 'public'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isHeartIncrementAction() {
+      return incoming().diff(existing()).affectedKeys().hasOnly(['heartsCount', 'updatedAt'])
+        && incoming().heartsCount == existing().heartsCount + 1
+        && incoming().createdAt == existing().createdAt
+        && incoming().authorUid == existing().authorUid
+        && incoming().visibility == existing().visibility;
+    }
+
+    function isSameSessionEditAction() {
+      return incoming().authorUid == existing().authorUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().heartsCount == existing().heartsCount
+        && incoming().visibility == existing().visibility
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'parentName',
+          'childName',
+          'department',
+          'familyIcon',
+          'noteColor',
+          'topic',
+          'promptUsed',
+          'message',
+          'photoData',
+          'photoCaption',
+          'updatedAt'
+        ]);
+    }
+
+    function isAdminEditAction() {
+      return isAdmin()
+        && incoming().authorUid == existing().authorUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().visibility == existing().visibility;
+    }
+
+    match /notes/{noteId} {
+      allow get: if isValidId(noteId) && existing().visibility == 'public';
+      allow list: if existing().visibility == 'public';
+
+      allow create: if isValidId(noteId)
+        && isValidMemoryNote(incoming())
+        && incoming().heartsCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidMemoryNote(incoming())
+        && isValidId(noteId)
+        && incoming().updatedAt == request.time
+        && (
+          isHeartIncrementAction() ||
+          isSameSessionEditAction() ||
+          isAdminEditAction()
+        );
+
+      allow delete: if isValidId(noteId)
+        && existing().visibility == 'public';
+    }
+  }
+}

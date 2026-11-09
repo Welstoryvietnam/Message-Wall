@@ -1,0 +1,6 @@
+{
+  "name": "Bảng Lưu Bút Yêu Thương - Welstory Kids Day 2026",
+  "description": "Trang tương tác lưu bút gia đình và chia sẻ khoảnh khắc trực tuyến theo thời gian thực tại sự kiện Welstory Kids Day 2026.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

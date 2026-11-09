@@ -1,0 +1,148 @@
+{
+  "entities": {
+    "MemoryNote": {
+      "title": "MemoryNote",
+      "description": "Lưu bút gia đình chia sẻ tại sự kiện Welstory Kids Day 2026, đồng bộ theo thời gian thực.",
+      "type": "object",
+      "properties": {
+        "parentName": {
+          "type": "string",
+          "description": "Họ và tên bố hoặc mẹ (nhân viên Welstory)",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "childName": {
+          "type": "string",
+          "description": "Tên bé tham gia sự kiện",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "department": {
+          "type": "string",
+          "description": "Phòng ban làm việc của bố/mẹ",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "familyIcon": {
+          "type": "string",
+          "description": "Mã biểu tượng gia đình được chọn",
+          "enum": [
+            "chef-family",
+            "sunshine-home",
+            "happy-bears",
+            "star-sprout",
+            "heart-hands",
+            "rainbow-kids"
+          ],
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "noteColor": {
+          "type": "string",
+          "description": "Màu giấy ghi chú",
+          "enum": [
+            "butter",
+            "peach",
+            "mint",
+            "sky",
+            "lavender",
+            "rose"
+          ],
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "topic": {
+          "type": "string",
+          "description": "Chủ đề lưu bút để phân loại và lọc",
+          "enum": [
+            "ky-niem-dep",
+            "loi-nhan-vien",
+            "loi-con-noi",
+            "cam-on-btc"
+          ],
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "promptUsed": {
+          "type": "string",
+          "description": "Câu hỏi gợi ý được chọn khi viết lưu bút",
+          "minLength": 0,
+          "maxLength": 200
+        },
+        "message": {
+          "type": "string",
+          "description": "Nội dung lời nhắn yêu thương của gia đình và bé",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "photoData": {
+          "type": "string",
+          "description": "Ảnh kỷ niệm đính kèm dạng Data URL đã nén hoặc đường dẫn ảnh sự kiện",
+          "minLength": 0,
+          "maxLength": 700000
+        },
+        "photoCaption": {
+          "type": "string",
+          "description": "Chú thích ngắn cho bức ảnh kỷ niệm",
+          "minLength": 0,
+          "maxLength": 140
+        },
+        "heartsCount": {
+          "type": "number",
+          "description": "Tổng số lượt thả tim tương tác"
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "UID người tạo hoặc mã phiên khách",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Chế độ hiển thị công khai trên bảng lưu bút chung",
+          "enum": [
+            "public"
+          ],
+          "minLength": 6,
+          "maxLength": 10
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Thời điểm tạo lưu bút (Server Timestamp)"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Thời điểm cập nhật gần nhất (Server Timestamp)"
+        }
+      },
+      "required": [
+        "parentName",
+        "childName",
+        "department",
+        "familyIcon",
+        "noteColor",
+        "topic",
+        "promptUsed",
+        "message",
+        "photoData",
+        "photoCaption",
+        "heartsCount",
+        "authorUid",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/notes/{noteId}": {
+      "schema": {
+        "$ref": "#/entities/MemoryNote"
+      },
+      "description": "Bộ sưu tập lưu bút gia đình công khai trong sự kiện Welstory Kids Day 2026"
+    }
+  }
+}

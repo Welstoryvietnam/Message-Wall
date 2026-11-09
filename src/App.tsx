@@ -1,0 +1,1007 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  where,
+  serverTimestamp,
+  increment,
+} from 'firebase/firestore';
+import {
+  Heart,
+  Search,
+  Send,
+  Lightbulb,
+  X,
+  Plus,
+  Image as ImageIcon,
+  MessageCircleHeart,
+  Sparkles,
+  Camera,
+} from 'lucide-react';
+import {
+  db,
+  OperationType,
+  handleFirestoreError,
+} from './firebase';
+import {
+  MemoryNote,
+  FamilyIconId,
+  NoteColorId,
+  TopicId,
+  VALIDATION_LIMITS,
+  TOPICS,
+  NOTE_COLORS,
+  PROMPT_SUGGESTIONS,
+  DEPARTMENTS,
+  PRESET_EVENT_PHOTOS,
+  PromptSuggestion,
+} from './types';
+import { FAMILY_ICONS, WelstoryLogoSvg } from './components/FamilyIcons';
+import { NoteCard } from './components/NoteCard';
+import { NoteDetailModal } from './components/NoteDetailModal';
+import {
+  compressImageFile,
+  getLikedNoteIds,
+  getOrCreateGuestUid,
+  INITIAL_SEED_NOTES,
+  markNoteLikedLocally,
+  triggerCelebrationConfetti,
+} from './utils/imageAndSeed';
+
+export default function App() {
+  // Device guest session ID (no login required)
+  const [guestUid] = useState<string>(() => getOrCreateGuestUid());
+
+  // Firestore real-time notes state
+  const [notes, setNotes] = useState<MemoryNote[]>([]);
+  const [isLoadingNotes, setIsLoadingNotes] = useState<boolean>(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const hasSeededRef = useRef<boolean>(false);
+  const knownNoteIdsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef<boolean>(true);
+
+  // Local heart tracking
+  const [likedNotesMap, setLikedNotesMap] = useState<Record<string, number>>(() =>
+    getLikedNoteIds()
+  );
+
+  // Header Inspiration Box & Post Modal state
+  const [showInspirationBox, setShowInspirationBox] = useState<boolean>(true);
+  const [isPostModalOpen, setIsPostModalOpen] = useState<boolean>(false);
+
+  // Lightbox image zoom state
+  const [lightboxPhoto, setLightboxPhoto] = useState<{
+    url: string;
+    caption: string;
+  } | null>(null);
+
+  // Form state inside Post Modal
+  const [parentName, setParentName] = useState<string>('');
+  const [childName, setChildName] = useState<string>('');
+  const [department, setDepartment] = useState<string>('');
+  const [familyIcon, setFamilyIcon] = useState<FamilyIconId>('chef-family');
+  const [noteColor, setNoteColor] = useState<NoteColorId>('butter');
+  const [topic, setTopic] = useState<TopicId>('ky-niem-dep');
+  const [promptUsed, setPromptUsed] = useState<string>('');
+  const [message, setMessage] = useState<string>('');
+  const [photoData, setPhotoData] = useState<string>('');
+  const [photoFileName, setPhotoFileName] = useState<string>('Chưa chọn ảnh nào');
+  const [photoCaption, setPhotoCaption] = useState<string>('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Filter & Wall controls
+  const [activeTopicFilter, setActiveTopicFilter] = useState<TopicId | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedNote, setSelectedNote] = useState<MemoryNote | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const authorInputRef = useRef<HTMLInputElement | null>(null);
+  const messageTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    window.setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3800);
+  };
+
+  // Listen to Firestore notes in real time (no login required)
+  useEffect(() => {
+    const notesPath = 'notes';
+    const q = query(collection(db, notesPath), where('visibility', '==', 'public'));
+
+    const unsubscribe = onSnapshot(
+      q,
+      async (snapshot) => {
+        if (snapshot.empty && !hasSeededRef.current) {
+          hasSeededRef.current = true;
+          try {
+            const authorId = getOrCreateGuestUid();
+
+            for (const seed of INITIAL_SEED_NOTES) {
+              await setDoc(doc(db, notesPath, seed.id), {
+                parentName: seed.parentName.slice(0, VALIDATION_LIMITS.PARENT_NAME_MAX),
+                childName: seed.childName.slice(0, VALIDATION_LIMITS.CHILD_NAME_MAX),
+                department: seed.department.slice(0, VALIDATION_LIMITS.DEPARTMENT_MAX),
+                familyIcon: seed.familyIcon,
+                noteColor: seed.noteColor,
+                topic: seed.topic,
+                promptUsed: seed.promptUsed.slice(0, VALIDATION_LIMITS.PROMPT_USED_MAX),
+                message: seed.message.slice(0, VALIDATION_LIMITS.MESSAGE_MAX),
+                photoData: seed.photoData.slice(0, VALIDATION_LIMITS.PHOTO_DATA_MAX),
+                photoCaption: seed.photoCaption.slice(0, VALIDATION_LIMITS.PHOTO_CAPTION_MAX),
+                heartsCount: 0,
+                authorUid: authorId,
+                visibility: 'public',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+          } catch (seedErr) {
+            console.warn('Could not seed initial notes:', seedErr);
+          }
+          setIsLoadingNotes(false);
+          return;
+        }
+
+        const fetchedNotes: MemoryNote[] = [];
+        let hasNewRemoteNote = false;
+
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const item: MemoryNote = {
+            id: docSnap.id,
+            parentName: String(data.parentName || ''),
+            childName: String(data.childName || ''),
+            department: String(data.department || ''),
+            familyIcon: (data.familyIcon as FamilyIconId) || 'chef-family',
+            noteColor: (data.noteColor as NoteColorId) || 'butter',
+            topic: (data.topic as TopicId) || 'ky-niem-dep',
+            promptUsed: String(data.promptUsed || ''),
+            message: String(data.message || ''),
+            photoData: String(data.photoData || ''),
+            photoCaption: String(data.photoCaption || ''),
+            heartsCount: Number(data.heartsCount || 0),
+            authorUid: String(data.authorUid || ''),
+            visibility: 'public',
+            createdAt: data.createdAt || null,
+            updatedAt: data.updatedAt || null,
+          };
+          fetchedNotes.push(item);
+
+          if (!isInitialLoadRef.current && !knownNoteIdsRef.current.has(docSnap.id)) {
+            hasNewRemoteNote = true;
+          }
+          knownNoteIdsRef.current.add(docSnap.id);
+        });
+
+        isInitialLoadRef.current = false;
+        setNotes(fetchedNotes);
+        setIsLoadingNotes(false);
+
+        if (hasNewRemoteNote) {
+          showToast('✨ Có lời chia sẻ mới vừa được ghim lên tường!');
+        }
+      },
+      (error) => {
+        setIsLoadingNotes(false);
+        handleFirestoreError(error, OperationType.LIST, notesPath);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Keep selectedNote in sync with real-time updates
+  useEffect(() => {
+    if (!selectedNote) return;
+    const updated = notes.find((n) => n.id === selectedNote.id);
+    if (updated) {
+      setSelectedNote(updated);
+    }
+  }, [notes, selectedNote?.id]);
+
+  // Open modal and focus input
+  const openPostModal = (suggestion?: PromptSuggestion) => {
+    if (suggestion) {
+      setTopic(suggestion.topic);
+      setPromptUsed(suggestion.question);
+    }
+    setFormError(null);
+    setIsPostModalOpen(true);
+    window.setTimeout(() => {
+      if (suggestion) {
+        messageTextareaRef.current?.focus();
+      } else {
+        authorInputRef.current?.focus();
+      }
+    }, 80);
+  };
+
+  const closePostModal = () => {
+    setIsPostModalOpen(false);
+    setFormError(null);
+  };
+
+  // Handle file upload with client-side compression
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingPhoto(true);
+    setFormError(null);
+    setPhotoFileName(file.name);
+    try {
+      const compressedDataUrl = await compressImageFile(file);
+      setPhotoData(compressedDataUrl);
+      if (!photoCaption) {
+        setPhotoCaption('Khoảnh khắc Welstory Kids Day 2026');
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Không thể tải ảnh lên.');
+      setPhotoFileName('Chưa chọn ảnh nào');
+    } finally {
+      setIsUploadingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const clearUploadedPhoto = () => {
+    setPhotoData('');
+    setPhotoCaption('');
+    setPhotoFileName('Chưa chọn ảnh nào');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Submit new note to Firestore
+  const handleSubmitNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+
+    const cleanParent = parentName.trim().slice(0, VALIDATION_LIMITS.PARENT_NAME_MAX);
+    const cleanChild = (childName.trim() || 'Bé yêu').slice(0, VALIDATION_LIMITS.CHILD_NAME_MAX);
+    const cleanDept = department.trim().slice(0, VALIDATION_LIMITS.DEPARTMENT_MAX);
+    const cleanPrompt = promptUsed.trim().slice(0, VALIDATION_LIMITS.PROMPT_USED_MAX);
+    const cleanMessage = message.trim().slice(0, VALIDATION_LIMITS.MESSAGE_MAX);
+    const cleanPhoto = photoData.trim().slice(0, VALIDATION_LIMITS.PHOTO_DATA_MAX);
+    const cleanCaption = photoCaption.trim().slice(0, VALIDATION_LIMITS.PHOTO_CAPTION_MAX);
+
+    if (!cleanParent || !cleanDept || !cleanMessage) {
+      setFormError('Vui lòng điền đầy đủ Tên Bố/Mẹ & Bé, Phòng ban và Lời chia sẻ.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const notesPath = 'notes';
+
+    try {
+      await addDoc(collection(db, notesPath), {
+        parentName: cleanParent,
+        childName: cleanChild,
+        department: cleanDept,
+        familyIcon,
+        noteColor,
+        topic,
+        promptUsed: cleanPrompt,
+        message: cleanMessage,
+        photoData: cleanPhoto,
+        photoCaption: cleanCaption,
+        heartsCount: 0,
+        authorUid: guestUid,
+        visibility: 'public',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      triggerCelebrationConfetti();
+      setParentName('');
+      setChildName('');
+      setDepartment('');
+      setMessage('');
+      setPromptUsed('');
+      clearUploadedPhoto();
+      setFamilyIcon('chef-family');
+      setNoteColor('butter');
+      setActiveTopicFilter('all');
+      closePostModal();
+      showToast('Đã ghim lời chia sẻ của gia đình lên bảng lưu bút!');
+    } catch (error) {
+      setFormError('Không thể gửi lưu bút lúc này. Vui lòng thử lại.');
+      handleFirestoreError(error, OperationType.CREATE, notesPath);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Heart reaction handler (atomic +1 in Firestore)
+  const handleHeartClick = async (noteId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    markNoteLikedLocally(noteId);
+    setLikedNotesMap(getLikedNoteIds());
+
+    const notePath = `notes/${noteId}`;
+    try {
+      await updateDoc(doc(db, 'notes', noteId), {
+        heartsCount: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, notePath);
+    }
+  };
+
+  // Delete note handler
+  const handleDeleteNote = async (noteId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const notePath = `notes/${noteId}`;
+    try {
+      await deleteDoc(doc(db, 'notes', noteId));
+      if (selectedNote?.id === noteId) {
+        setSelectedNote(null);
+      }
+      showToast('Đã xóa lưu bút khỏi tường.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, notePath);
+    }
+  };
+
+  // Computed KPI metrics
+  const metrics = useMemo(() => {
+    const totalNotes = notes.length;
+    const totalHearts = notes.reduce((acc, n) => acc + (n.heartsCount || 0), 0);
+    return { totalNotes, totalHearts };
+  }, [notes]);
+
+  // Filtered and sorted notes (newest first)
+  const filteredNotes = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return notes
+      .filter((note) => {
+        if (activeTopicFilter !== 'all' && note.topic !== activeTopicFilter) {
+          return false;
+        }
+        if (!q) return true;
+        return (
+          note.parentName.toLowerCase().includes(q) ||
+          note.childName.toLowerCase().includes(q) ||
+          note.department.toLowerCase().includes(q) ||
+          note.message.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const timeA =
+          a.createdAt && typeof a.createdAt.toMillis === 'function'
+            ? a.createdAt.toMillis()
+            : Date.now();
+        const timeB =
+          b.createdAt && typeof b.createdAt.toMillis === 'function'
+            ? b.createdAt.toMillis()
+            : Date.now();
+        return timeB - timeA;
+      });
+  }, [notes, activeTopicFilter, searchQuery]);
+
+  return (
+    <div className="min-h-screen text-slate-800 flex flex-col justify-between overflow-x-hidden">
+      {/* ================= HEADER / HERO BANNER ================= */}
+      <header className="relative bg-gradient-to-b from-orange-100/90 via-amber-50/60 to-transparent pt-6 pb-8 px-4 sm:px-6 lg:px-8 overflow-hidden border-b border-orange-200/50">
+        {/* Floating corner decorations */}
+        <div
+          className="hidden md:block absolute top-6 left-10 text-5xl opacity-60 float-anim pointer-events-none select-none"
+          aria-hidden="true"
+        >
+          🎈
+        </div>
+        <div
+          className="hidden md:block absolute top-14 right-14 text-5xl opacity-60 float-anim pointer-events-none select-none"
+          style={{ animationDelay: '1.5s' }}
+          aria-hidden="true"
+        >
+          🎡
+        </div>
+        <div
+          className="hidden lg:block absolute bottom-6 left-1/4 text-4xl opacity-50 float-anim pointer-events-none select-none"
+          style={{ animationDelay: '2.5s' }}
+          aria-hidden="true"
+        >
+          🎨
+        </div>
+
+        <div className="max-w-6xl mx-auto text-center relative z-10">
+          {/* Official Key Visual Banner Image */}
+          <div className="max-w-4xl mx-auto mb-6 rounded-3xl overflow-hidden shadow-xl border-4 border-white bg-amber-100/80 transition-transform duration-300 hover:scale-[1.01] group cursor-pointer" onClick={() => openPostModal()}>
+            <img
+              src="/assets/aistudio/Background_ab42acbc.png"
+              alt="Welstory Kid's Day 2026 - Bảng Lưu Bút Yêu Thương"
+              className="w-full h-auto object-cover max-h-[460px] sm:max-h-[540px]"
+            />
+          </div>
+
+          {/* Key Visual Title & Kêu gọi */}
+          <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-600 leading-relaxed mb-6">
+            Những tiếng cười giòn tan và ánh mắt rạng rỡ của các &ldquo;thiên thần nhỏ&rdquo; là món quà tuyệt vời nhất. Hãy cùng lưu giữ lại những cảm xúc, kỷ niệm đẹp và các câu nói ngộ nghĩnh của các bé sau ngày hội tại bức tường kỷ niệm này nhé!
+          </p>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-2">
+            <button
+              type="button"
+              onClick={() => openPostModal()}
+              className="inline-flex items-center gap-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-base sm:text-lg px-7 py-3.5 rounded-2xl shadow-lg shadow-orange-500/30 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Send className="w-5 h-5" />
+              <span>Viết chia sẻ ngay</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowInspirationBox((prev) => !prev)}
+              className="inline-flex items-center gap-2 bg-white hover:bg-orange-50 text-slate-700 font-heading font-semibold text-sm sm:text-base px-5 py-3.5 rounded-2xl border border-orange-200 shadow-xs transition-all whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Lightbulb className="w-5 h-5 text-amber-500" />
+              <span>Gợi ý viết cảm nghĩ</span>
+            </button>
+          </div>
+
+          {/* Question Prompts Box on Top of Page */}
+          {showInspirationBox && (
+            <div className="max-w-3xl mx-auto mt-6 bg-white/95 backdrop-blur-md border-2 border-dashed border-amber-300 rounded-2xl p-4 sm:p-5 text-left shadow-md transition-all">
+              <div className="flex items-start justify-between gap-3 mb-2.5">
+                <h2 className="font-heading font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
+                  <span className="text-xl" aria-hidden="true">
+                    💡
+                  </span>
+                  <span>
+                    Bố mẹ chưa biết bắt đầu từ đâu? Hãy chạm vào 1 trong các câu hỏi gợi ý sau nhé:
+                  </span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowInspirationBox(false)}
+                  aria-label="Ẩn hộp gợi ý"
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <ul className="space-y-2 text-xs sm:text-sm text-slate-600 pl-1">
+                {PROMPT_SUGGESTIONS.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => openPostModal(item)}
+                      className="w-full text-left flex items-start gap-2 py-1 px-2 rounded-xl hover:bg-amber-50/90 hover:text-slate-900 transition-colors group cursor-pointer"
+                    >
+                      <span className="text-[#EA5514] font-heading font-bold shrink-0">
+                        {item.number}
+                      </span>
+                      <span className="flex-1">
+                        {item.question}{' '}
+                        <span className="text-xs font-heading font-semibold text-[#EA5514] opacity-80 group-hover:opacity-100">
+                          ({item.topicLabel} →)
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* ================= TOOLBAR & TOPIC FILTER BAR ================= */}
+      <section className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 mb-8">
+        <div className="bg-white/90 backdrop-blur-md border border-orange-100 rounded-2xl p-4 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
+          {/* Stats & Online Sync Status */}
+          <div className="flex items-center gap-5 w-full lg:w-auto justify-center lg:justify-start border-b lg:border-b-0 pb-3 lg:pb-0 border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#EA5514] flex items-center justify-center">
+                <MessageCircleHeart className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Lời chia sẻ</p>
+                <p className="font-heading font-extrabold text-lg text-slate-800 leading-none font-mono-num">
+                  {metrics.totalNotes}
+                </p>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-slate-200" />
+
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center">
+                <Heart className="w-5 h-5 fill-rose-500" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Lượt thả tim</p>
+                <p className="font-heading font-extrabold text-lg text-slate-800 leading-none font-mono-num">
+                  {metrics.totalHearts}
+                </p>
+              </div>
+            </div>
+
+            <div className="hidden sm:block h-8 w-px bg-slate-200" />
+
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60">
+              <span>Đồng bộ trực tuyến</span>
+            </div>
+          </div>
+
+          {/* Topic Filter Buttons & Search Input */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setActiveTopicFilter('all')}
+                className={`shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all whitespace-nowrap cursor-pointer ${
+                  activeTopicFilter === 'all'
+                    ? 'bg-slate-800 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-orange-100 text-slate-700'
+                }`}
+              >
+                🌟 Tất cả
+              </button>
+
+              {TOPICS.map((t) => {
+                const isActive = activeTopicFilter === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setActiveTopicFilter(t.id)}
+                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-800 text-white shadow-xs'
+                        : 'bg-slate-100 hover:bg-orange-100 text-slate-700'
+                    }`}
+                  >
+                    {t.emoji} {t.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full sm:w-56">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm tên, phòng ban..."
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/30 focus:border-[#EA5514] transition-all"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= MESSAGE WALL GRID (BẢNG LƯU BÚT) ================= */}
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex-grow pb-16">
+        {isLoadingNotes ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 items-start">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="h-64 rounded-3xl border-2 border-amber-200 bg-amber-50/60 p-6 animate-pulse flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="h-10 w-2/3 bg-amber-200/60 rounded-2xl" />
+                  <div className="h-4 w-1/3 bg-amber-200/60 rounded-lg" />
+                  <div className="h-20 w-full bg-amber-200/50 rounded-xl" />
+                </div>
+                <div className="h-6 w-full bg-amber-200/50 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        ) : filteredNotes.length === 0 ? (
+          <div className="text-center py-16 px-4">
+            <div className="text-6xl mb-4" aria-hidden="true">
+              🎈
+            </div>
+            <h3 className="font-heading font-bold text-xl text-slate-700 mb-2">
+              Chưa tìm thấy lời chia sẻ nào phù hợp
+            </h3>
+            <p className="text-slate-500 text-sm mb-6">
+              Hãy thử từ khóa khác hoặc trở thành gia đình đầu tiên viết cảm nghĩ cho chủ đề này nhé!
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              {(activeTopicFilter !== 'all' || searchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTopicFilter('all');
+                    setSearchQuery('');
+                  }}
+                  className="px-5 py-2.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+                >
+                  Xem tất cả lưu bút
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openPostModal()}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+              >
+                Gửi lưu bút ngay
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 items-start">
+            {filteredNotes.map((note, idx) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                index={idx}
+                localLikes={likedNotesMap[note.id] || 0}
+                canDelete={note.authorUid === guestUid}
+                onHeartClick={handleHeartClick}
+                onSelectNote={(n) => setSelectedNote(n)}
+                onOpenLightbox={(url, caption, e) => {
+                  e.stopPropagation();
+                  setLightboxPhoto({ url, caption });
+                }}
+                onDeleteNote={handleDeleteNote}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* FLOATING ACTION BUTTON FOR MOBILE */}
+      <button
+        type="button"
+        onClick={() => openPostModal()}
+        className="md:hidden fixed bottom-6 right-6 z-30 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white p-4 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center active:scale-90 transition-transform"
+        aria-label="Viết chia sẻ"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* ================= MODAL GỬI LỜI CHIA SẺ ================= */}
+      {isPostModalOpen && (
+        <div
+          onClick={closePostModal}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-orange-100 p-6 sm:p-7"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-2xl bg-orange-100 text-[#EA5514] flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-heading font-bold text-xl text-slate-800">
+                    Gửi Lưu Bút Kids&apos; Day 2026
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Chia sẻ niềm vui cùng đại gia đình Welstory (Không cần đăng nhập)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closePostModal}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitNote} className="space-y-4">
+              {/* Row 1: Parent Name & Child Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Tên Bố/Mẹ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    ref={authorInputRef}
+                    type="text"
+                    required
+                    maxLength={VALIDATION_LIMITS.PARENT_NAME_MAX}
+                    value={parentName}
+                    onChange={(e) => setParentName(e.target.value)}
+                    placeholder="VD: Mẹ Thu Hà / Bố Tuấn"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/40 focus:border-[#EA5514]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Tên Bé Yêu
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={VALIDATION_LIMITS.CHILD_NAME_MAX}
+                    value={childName}
+                    onChange={(e) => setChildName(e.target.value)}
+                    placeholder="VD: Bé Bắp (5 tuổi)"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/40 focus:border-[#EA5514]"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Department */}
+              <div>
+                <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Phòng ban / Bộ phận <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  list="welstory-dept-list"
+                  required
+                  maxLength={VALIDATION_LIMITS.DEPARTMENT_MAX}
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="VD: Phòng Hành chính Nhân sự (HR)"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/40 focus:border-[#EA5514]"
+                />
+                <datalist id="welstory-dept-list">
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d} value={d} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Row 3: Topic & Family Avatar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Chủ đề chia sẻ
+                  </label>
+                  <select
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value as TopicId)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/40 focus:border-[#EA5514]"
+                  >
+                    {TOPICS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.optionText}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Biểu tượng gia đình
+                  </label>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-1.5">
+                    {FAMILY_ICONS.map((icon) => {
+                      const active = familyIcon === icon.id;
+                      return (
+                        <button
+                          key={icon.id}
+                          type="button"
+                          onClick={() => setFamilyIcon(icon.id)}
+                          title={icon.label}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg transition-all cursor-pointer ${
+                            active
+                              ? 'bg-white shadow-xs ring-2 ring-[#EA5514]'
+                              : 'hover:bg-white'
+                          }`}
+                        >
+                          {icon.emoji}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 4: Message Content */}
+              <div>
+                <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Lời chia sẻ / Kỷ niệm của gia đình <span className="text-rose-500">*</span>
+                </label>
+                {promptUsed && (
+                  <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-900">
+                    <span className="truncate">Gợi ý: “{promptUsed}”</span>
+                    <button
+                      type="button"
+                      onClick={() => setPromptUsed('')}
+                      className="text-amber-700 hover:underline shrink-0"
+                    >
+                      Bỏ
+                    </button>
+                  </div>
+                )}
+                <textarea
+                  ref={messageTextareaRef}
+                  rows={4}
+                  required
+                  maxLength={VALIDATION_LIMITS.MESSAGE_MAX}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Hãy chia sẻ cảm xúc của bố mẹ hoặc trích dẫn câu nói ngộ nghĩnh của các bé sau ngày hội nhé..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/40 focus:border-[#EA5514] resize-none"
+                />
+              </div>
+
+              {/* Row 5: Photo Upload & Quick Presets */}
+              <div>
+                <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Đính kèm hình ảnh kỷ niệm (Tùy chọn)
+                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={isUploadingPhoto}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 font-medium text-xs sm:text-sm rounded-xl border border-orange-200 transition-colors"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    <span>{isUploadingPhoto ? 'Đang nén ảnh...' : 'Chọn ảnh từ máy'}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                  <span className="text-xs text-slate-400 truncate max-w-[160px]">
+                    {photoFileName}
+                  </span>
+                  {photoData && (
+                    <button
+                      type="button"
+                      onClick={clearUploadedPhoto}
+                      className="text-xs text-rose-500 hover:underline font-medium"
+                    >
+                      Xóa ảnh
+                    </button>
+                  )}
+                </div>
+
+                {/* Preset Event Photos for quick test */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {PRESET_EVENT_PHOTOS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setPhotoData(preset.url);
+                        setPhotoCaption(preset.defaultCaption);
+                        setPhotoFileName(preset.label);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 text-[11px] font-medium text-slate-600 hover:text-orange-700 transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {photoData && (
+                  <div className="mt-3 relative w-full h-40 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                    <img
+                      src={photoData}
+                      alt="Xem trước ảnh đính kèm"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Row 6: Note Paper Color */}
+              <div>
+                <label className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Chọn màu giấy Note
+                </label>
+                <div className="flex items-center gap-3">
+                  {NOTE_COLORS.map((color) => {
+                    const active = noteColor === color.id;
+                    return (
+                      <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => setNoteColor(color.id)}
+                        title={color.name}
+                        className={`w-8 h-8 rounded-full border-2 ${color.swatchClass} transition-all cursor-pointer ${
+                          active ? 'ring-2 ring-offset-2 ring-[#EA5514]' : ''
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {formError && (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs text-rose-700 font-medium">
+                  {formError}
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closePostModal}
+                  className="px-5 py-2.5 rounded-xl text-sm font-heading font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isUploadingPhoto}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-sm rounded-xl shadow-md shadow-orange-500/20 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Đang ghim...' : 'Ghim lên tường'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL XEM ẢNH TO (LIGHTBOX) ================= */}
+      {lightboxPhoto && (
+        <div
+          onClick={() => setLightboxPhoto(null)}
+          className="fixed inset-0 z-50 bg-slate-900/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 cursor-zoom-out"
+        >
+          <img
+            src={lightboxPhoto.url}
+            alt={lightboxPhoto.caption}
+            className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl border-4 border-white object-contain"
+          />
+          {lightboxPhoto.caption && (
+            <p className="mt-3 text-sm font-heading font-bold text-white bg-slate-900/70 px-4 py-1.5 rounded-xl">
+              {lightboxPhoto.caption}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ================= MODAL XEM CHI TIẾT LƯU BÚT ================= */}
+      <NoteDetailModal
+        note={selectedNote}
+        localLikes={selectedNote ? likedNotesMap[selectedNote.id] || 0 : 0}
+        onClose={() => setSelectedNote(null)}
+        onHeartClick={handleHeartClick}
+      />
+
+      {/* ================= TOAST THÔNG BÁO ================= */}
+      <div
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 ${
+          toastMessage ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+        }`}
+      >
+        <div className="bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-medium">
+          <span className="text-xl" aria-hidden="true">
+            🎉
+          </span>
+          <span>{toastMessage || 'Cảm ơn bố/mẹ đã gửi lời chia sẻ lên tường!'}</span>
+        </div>
+      </div>
+
+      {/* ================= FOOTER ================= */}
+      <footer className="bg-white/80 border-t border-orange-100 py-6 px-4 text-center text-xs sm:text-sm text-slate-500">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="font-heading font-bold text-slate-700">
+            🌟 Ban Tổ Chức Welstory Kids&apos; Day 2026
+          </p>
+          <p>Cảm ơn sự đồng hành tuyệt vời của các bố mẹ và các siêu nhí!</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
