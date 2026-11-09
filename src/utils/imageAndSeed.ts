@@ -77,6 +77,30 @@ export function triggerCelebrationConfetti(): void {
   }, 180);
 }
 
+export function triggerHeartConfetti(originX = 0.5, originY = 0.6): void {
+  if (
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    return;
+  }
+
+  const colors = ['#F43F5E', '#FB7185', '#EA5514', '#F59E0B', '#EC4899', '#FFE4E6'];
+
+  confetti({
+    particleCount: 40,
+    spread: 65,
+    startVelocity: 28,
+    scalar: 0.9,
+    origin: {
+      x: Math.min(Math.max(originX, 0.08), 0.92),
+      y: Math.min(Math.max(originY, 0.1), 0.9),
+    },
+    colors,
+  });
+}
+
 export async function compressImageFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

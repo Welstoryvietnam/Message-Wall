@@ -51,6 +51,7 @@ import {
   INITIAL_SEED_NOTES,
   markNoteLikedLocally,
   triggerCelebrationConfetti,
+  triggerHeartConfetti,
 } from './utils/imageAndSeed';
 
 export default function App() {
@@ -347,6 +348,11 @@ export default function App() {
   // Heart reaction handler (atomic +1 in Firestore)
   const handleHeartClick = async (noteId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const originX =
+      typeof window !== 'undefined' && e.clientX ? e.clientX / window.innerWidth : 0.5;
+    const originY =
+      typeof window !== 'undefined' && e.clientY ? e.clientY / window.innerHeight : 0.6;
+
     markNoteLikedLocally(noteId);
     setLikedNotesMap(getLikedNoteIds());
 
@@ -356,6 +362,7 @@ export default function App() {
         heartsCount: increment(1),
         updatedAt: serverTimestamp(),
       });
+      triggerHeartConfetti(originX, originY);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, notePath);
     }
@@ -454,22 +461,22 @@ export default function App() {
           </p>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+          <div className="flex flex-row flex-nowrap items-center justify-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={() => openPostModal()}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-sm sm:text-base px-6 py-3 rounded-2xl shadow-md shadow-orange-500/25 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-xs sm:text-sm px-3.5 py-2.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl shadow-md shadow-orange-500/25 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap cursor-pointer"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
               <span>Viết chia sẻ ngay</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowInspirationBox((prev) => !prev)}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-sm sm:text-base px-6 py-3 rounded-2xl shadow-md shadow-orange-500/25 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-xs sm:text-sm px-3.5 py-2.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl shadow-md shadow-orange-500/25 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap cursor-pointer"
             >
-              <Lightbulb className="w-4 h-4 text-amber-200" />
+              <Lightbulb className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200 shrink-0" />
               <span>Gợi ý viết cảm nghĩ</span>
             </button>
           </div>
