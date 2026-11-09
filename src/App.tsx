@@ -14,7 +14,6 @@ import {
 } from 'firebase/firestore';
 import {
   Heart,
-  Search,
   Send,
   Lightbulb,
   X,
@@ -42,7 +41,7 @@ import {
   PRESET_EVENT_PHOTOS,
   PromptSuggestion,
 } from './types';
-import { FAMILY_ICONS, WelstoryLogoSvg } from './components/FamilyIcons';
+import { FAMILY_ICONS } from './components/FamilyIcons';
 import { NoteCard } from './components/NoteCard';
 import { NoteDetailModal } from './components/NoteDetailModal';
 import {
@@ -72,7 +71,7 @@ export default function App() {
   );
 
   // Header Inspiration Box & Post Modal state
-  const [showInspirationBox, setShowInspirationBox] = useState<boolean>(true);
+  const [showInspirationBox, setShowInspirationBox] = useState<boolean>(false);
   const [isPostModalOpen, setIsPostModalOpen] = useState<boolean>(false);
 
   // Lightbox image zoom state
@@ -99,7 +98,6 @@ export default function App() {
 
   // Filter & Wall controls
   const [activeTopicFilter, setActiveTopicFilter] = useState<TopicId | 'all'>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedNote, setSelectedNote] = useState<MemoryNote | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -356,28 +354,25 @@ export default function App() {
     }
   };
 
-  // Computed KPI metrics
+  // Computed KPI metrics & topic counts
   const metrics = useMemo(() => {
     const totalNotes = notes.length;
     const totalHearts = notes.reduce((acc, n) => acc + (n.heartsCount || 0), 0);
-    return { totalNotes, totalHearts };
+    const countsByTopic: Record<string, number> = { all: notes.length };
+    for (const t of TOPICS) {
+      countsByTopic[t.id] = notes.filter((n) => n.topic === t.id).length;
+    }
+    return { totalNotes, totalHearts, countsByTopic };
   }, [notes]);
 
   // Filtered and sorted notes (newest first)
   const filteredNotes = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
     return notes
       .filter((note) => {
         if (activeTopicFilter !== 'all' && note.topic !== activeTopicFilter) {
           return false;
         }
-        if (!q) return true;
-        return (
-          note.parentName.toLowerCase().includes(q) ||
-          note.childName.toLowerCase().includes(q) ||
-          note.department.toLowerCase().includes(q) ||
-          note.message.toLowerCase().includes(q)
-        );
+        return true;
       })
       .sort((a, b) => {
         const timeA =
@@ -390,76 +385,79 @@ export default function App() {
             : Date.now();
         return timeB - timeA;
       });
-  }, [notes, activeTopicFilter, searchQuery]);
+  }, [notes, activeTopicFilter]);
 
   return (
     <div className="min-h-screen text-slate-800 flex flex-col justify-between overflow-x-hidden">
       {/* ================= HEADER / HERO BANNER ================= */}
-      <header className="relative bg-gradient-to-b from-orange-100/90 via-amber-50/60 to-transparent pt-6 pb-8 px-4 sm:px-6 lg:px-8 overflow-hidden border-b border-orange-200/50">
+      <header className="relative bg-gradient-to-b from-orange-100/90 via-amber-50/60 to-transparent pt-5 pb-6 px-4 sm:px-6 lg:px-8 overflow-hidden border-b border-orange-200/50">
         {/* Floating corner decorations */}
         <div
-          className="hidden md:block absolute top-6 left-10 text-5xl opacity-60 float-anim pointer-events-none select-none"
+          className="hidden md:block absolute top-6 left-10 text-4xl opacity-60 float-anim pointer-events-none select-none"
           aria-hidden="true"
         >
           🎈
         </div>
         <div
-          className="hidden md:block absolute top-14 right-14 text-5xl opacity-60 float-anim pointer-events-none select-none"
+          className="hidden md:block absolute top-12 right-12 text-4xl opacity-60 float-anim pointer-events-none select-none"
           style={{ animationDelay: '1.5s' }}
           aria-hidden="true"
         >
           🎡
         </div>
         <div
-          className="hidden lg:block absolute bottom-6 left-1/4 text-4xl opacity-50 float-anim pointer-events-none select-none"
+          className="hidden lg:block absolute bottom-6 left-1/5 text-3xl opacity-50 float-anim pointer-events-none select-none"
           style={{ animationDelay: '2.5s' }}
           aria-hidden="true"
         >
           🎨
         </div>
 
-        <div className="max-w-6xl mx-auto text-center relative z-10">
-          {/* Official Key Visual Banner Image */}
-          <div className="max-w-4xl mx-auto mb-6 rounded-3xl overflow-hidden shadow-xl border-4 border-white bg-amber-100/80 transition-transform duration-300 hover:scale-[1.01] group cursor-pointer" onClick={() => openPostModal()}>
+        <div className="max-w-4xl mx-auto text-center relative z-10">
+          {/* Official Key Visual Banner Image - Balanced & Compact Size */}
+          <div
+            className="max-w-md sm:max-w-lg mx-auto mb-4 rounded-2xl overflow-hidden shadow-md border-4 border-white bg-sky-100/70 transition-transform duration-300 hover:scale-[1.01] cursor-pointer"
+            onClick={() => openPostModal()}
+          >
             <img
               src="/assets/aistudio/Background_ab42acbc.png"
               alt="Welstory Kid's Day 2026 - Bảng Lưu Bút Yêu Thương"
-              className="w-full h-auto object-cover max-h-[460px] sm:max-h-[540px]"
+              className="w-full h-auto block"
             />
           </div>
 
           {/* Key Visual Title & Kêu gọi */}
-          <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-600 leading-relaxed mb-6">
+          <p className="max-w-xl mx-auto text-xs sm:text-sm text-slate-600 leading-relaxed mb-4">
             Những tiếng cười giòn tan và ánh mắt rạng rỡ của các &ldquo;thiên thần nhỏ&rdquo; là món quà tuyệt vời nhất. Hãy cùng lưu giữ lại những cảm xúc, kỷ niệm đẹp và các câu nói ngộ nghĩnh của các bé sau ngày hội tại bức tường kỷ niệm này nhé!
           </p>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-2">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             <button
               type="button"
               onClick={() => openPostModal()}
-              className="inline-flex items-center gap-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-base sm:text-lg px-7 py-3.5 rounded-2xl shadow-lg shadow-orange-500/30 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-sm sm:text-base px-6 py-3 rounded-2xl shadow-md shadow-orange-500/25 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4" />
               <span>Viết chia sẻ ngay</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowInspirationBox((prev) => !prev)}
-              className="inline-flex items-center gap-2 bg-white hover:bg-orange-50 text-slate-700 font-heading font-semibold text-sm sm:text-base px-5 py-3.5 rounded-2xl border border-orange-200 shadow-xs transition-all whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-[#EA5514] to-orange-500 hover:from-orange-600 hover:to-red-500 text-white font-heading font-bold text-sm sm:text-base px-6 py-3 rounded-2xl shadow-md shadow-orange-500/25 transform hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Lightbulb className="w-5 h-5 text-amber-500" />
+              <Lightbulb className="w-4 h-4 text-amber-200" />
               <span>Gợi ý viết cảm nghĩ</span>
             </button>
           </div>
 
           {/* Question Prompts Box on Top of Page */}
           {showInspirationBox && (
-            <div className="max-w-3xl mx-auto mt-6 bg-white/95 backdrop-blur-md border-2 border-dashed border-amber-300 rounded-2xl p-4 sm:p-5 text-left shadow-md transition-all">
-              <div className="flex items-start justify-between gap-3 mb-2.5">
-                <h2 className="font-heading font-bold text-slate-800 flex items-center gap-2 text-sm sm:text-base">
-                  <span className="text-xl" aria-hidden="true">
+            <div className="max-w-2xl mx-auto mt-5 bg-white/95 backdrop-blur-md border-2 border-dashed border-amber-300 rounded-2xl p-4 text-left shadow-sm transition-all">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <h2 className="font-heading font-bold text-slate-800 flex items-center gap-2 text-xs sm:text-sm">
+                  <span className="text-lg" aria-hidden="true">
                     💡
                   </span>
                   <span>
@@ -476,7 +474,7 @@ export default function App() {
                 </button>
               </div>
 
-              <ul className="space-y-2 text-xs sm:text-sm text-slate-600 pl-1">
+              <ul className="space-y-1.5 text-xs sm:text-sm text-slate-600 pl-1">
                 {PROMPT_SUGGESTIONS.map((item) => (
                   <li key={item.id}>
                     <button
@@ -502,164 +500,180 @@ export default function App() {
         </div>
       </header>
 
-      {/* ================= TOOLBAR & TOPIC FILTER BAR ================= */}
-      <section className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 mb-8">
-        <div className="bg-white/90 backdrop-blur-md border border-orange-100 rounded-2xl p-4 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-4">
-          {/* Stats & Online Sync Status */}
-          <div className="flex items-center gap-5 w-full lg:w-auto justify-center lg:justify-start border-b lg:border-b-0 pb-3 lg:pb-0 border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#EA5514] flex items-center justify-center">
-                <MessageCircleHeart className="w-5 h-5" />
+      {/* ================= MAIN CONTENT: LEFT TOPIC LIST + RIGHT MESSAGE WALL ================= */}
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 flex-grow pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+          {/* Left Panel: Stats & Vertical Topic List (dạng list) */}
+          <aside className="lg:col-span-3 lg:sticky lg:top-6 bg-white/95 backdrop-blur-md border border-orange-100 rounded-3xl p-4 sm:p-5 shadow-xs space-y-5">
+            {/* Stats Summary */}
+            <div className="grid grid-cols-2 gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#EA5514] flex items-center justify-center shrink-0">
+                  <MessageCircleHeart className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-500 font-medium">Lời chia sẻ</p>
+                  <p className="font-heading font-extrabold text-base text-slate-800 leading-none font-mono-num mt-0.5">
+                    {metrics.totalNotes}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Lời chia sẻ</p>
-                <p className="font-heading font-extrabold text-lg text-slate-800 leading-none font-mono-num">
-                  {metrics.totalNotes}
-                </p>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center shrink-0">
+                  <Heart className="w-4 h-4 fill-rose-500" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-slate-500 font-medium">Lượt thả tim</p>
+                  <p className="font-heading font-extrabold text-base text-slate-800 leading-none font-mono-num mt-0.5">
+                    {metrics.totalHearts}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="h-8 w-px bg-slate-200" />
-
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center">
-                <Heart className="w-5 h-5 fill-rose-500" />
+            {/* Vertical Topic List */}
+            <div>
+              <div className="flex items-center justify-between mb-2.5 px-1">
+                <h2 className="text-xs font-heading font-bold text-slate-500 uppercase tracking-wider">
+                  Chủ đề lưu bút
+                </h2>
+                <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                  Trực tuyến
+                </span>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 font-medium">Lượt thả tim</p>
-                <p className="font-heading font-extrabold text-lg text-slate-800 leading-none font-mono-num">
-                  {metrics.totalHearts}
-                </p>
-              </div>
-            </div>
 
-            <div className="hidden sm:block h-8 w-px bg-slate-200" />
-
-            <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60">
-              <span>Đồng bộ trực tuyến</span>
-            </div>
-          </div>
-
-          {/* Topic Filter Buttons & Search Input */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 no-scrollbar">
-              <button
-                type="button"
-                onClick={() => setActiveTopicFilter('all')}
-                className={`shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all whitespace-nowrap cursor-pointer ${
-                  activeTopicFilter === 'all'
-                    ? 'bg-slate-800 text-white shadow-xs'
-                    : 'bg-slate-100 hover:bg-orange-100 text-slate-700'
-                }`}
-              >
-                🌟 Tất cả
-              </button>
-
-              {TOPICS.map((t) => {
-                const isActive = activeTopicFilter === t.id;
-                return (
+              <ul className="flex flex-col gap-1.5" role="list">
+                <li>
                   <button
-                    key={t.id}
                     type="button"
-                    onClick={() => setActiveTopicFilter(t.id)}
-                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      isActive
+                    onClick={() => setActiveTopicFilter('all')}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer ${
+                      activeTopicFilter === 'all'
                         ? 'bg-slate-800 text-white shadow-xs'
-                        : 'bg-slate-100 hover:bg-orange-100 text-slate-700'
+                        : 'bg-slate-50 hover:bg-orange-50 text-slate-700'
                     }`}
                   >
-                    {t.emoji} {t.label}
+                    <span className="flex items-center gap-2">
+                      <span>🌟</span>
+                      <span>Tất cả</span>
+                    </span>
+                    <span
+                      className={`text-xs font-mono-num px-2 py-0.5 rounded-lg ${
+                        activeTopicFilter === 'all'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-200/70 text-slate-600'
+                      }`}
+                    >
+                      {metrics.countsByTopic.all || 0}
+                    </span>
                   </button>
-                );
-              })}
-            </div>
+                </li>
 
-            {/* Search Input */}
-            <div className="relative w-full sm:w-56">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm tên, phòng ban..."
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/30 focus:border-[#EA5514] transition-all"
-              />
+                {TOPICS.map((t) => {
+                  const isActive = activeTopicFilter === t.id;
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTopicFilter(t.id)}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-slate-800 text-white shadow-xs'
+                            : 'bg-slate-50 hover:bg-orange-50 text-slate-700'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{t.emoji}</span>
+                          <span>{t.label}</span>
+                        </span>
+                        <span
+                          className={`text-xs font-mono-num px-2 py-0.5 rounded-lg ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-slate-200/70 text-slate-600'
+                          }`}
+                        >
+                          {metrics.countsByTopic[t.id] || 0}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
+          </aside>
+
+          {/* Right Panel: Sticky-Note Message Wall Grid */}
+          <div className="lg:col-span-9">
+            {isLoadingNotes ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                {[1, 2, 3].map((n) => (
+                  <div
+                    key={n}
+                    className="h-64 rounded-3xl border-2 border-amber-200 bg-amber-50/60 p-6 animate-pulse flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="h-10 w-2/3 bg-amber-200/60 rounded-2xl" />
+                      <div className="h-4 w-1/3 bg-amber-200/60 rounded-lg" />
+                      <div className="h-20 w-full bg-amber-200/50 rounded-xl" />
+                    </div>
+                    <div className="h-6 w-full bg-amber-200/50 rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredNotes.length === 0 ? (
+              <div className="bg-white/80 border border-orange-100 rounded-3xl text-center py-16 px-4">
+                <div className="text-6xl mb-4" aria-hidden="true">
+                  🎈
+                </div>
+                <h3 className="font-heading font-bold text-xl text-slate-700 mb-2">
+                  Chưa có lời chia sẻ nào trong chủ đề này
+                </h3>
+                <p className="text-slate-500 text-sm mb-6">
+                  Hãy trở thành gia đình đầu tiên viết cảm nghĩ cho chủ đề này nhé!
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  {activeTopicFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTopicFilter('all')}
+                      className="px-5 py-2.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+                    >
+                      Xem tất cả lưu bút
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openPostModal()}
+                    className="px-5 py-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+                  >
+                    Gửi lưu bút ngay
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                {filteredNotes.map((note, idx) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    index={idx}
+                    localLikes={likedNotesMap[note.id] || 0}
+                    canDelete={note.authorUid === guestUid}
+                    onHeartClick={handleHeartClick}
+                    onSelectNote={(n) => setSelectedNote(n)}
+                    onOpenLightbox={(url, caption, e) => {
+                      e.stopPropagation();
+                      setLightboxPhoto({ url, caption });
+                    }}
+                    onDeleteNote={handleDeleteNote}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      </section>
-
-      {/* ================= MESSAGE WALL GRID (BẢNG LƯU BÚT) ================= */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex-grow pb-16">
-        {isLoadingNotes ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 items-start">
-            {[1, 2, 3].map((n) => (
-              <div
-                key={n}
-                className="h-64 rounded-3xl border-2 border-amber-200 bg-amber-50/60 p-6 animate-pulse flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="h-10 w-2/3 bg-amber-200/60 rounded-2xl" />
-                  <div className="h-4 w-1/3 bg-amber-200/60 rounded-lg" />
-                  <div className="h-20 w-full bg-amber-200/50 rounded-xl" />
-                </div>
-                <div className="h-6 w-full bg-amber-200/50 rounded-lg" />
-              </div>
-            ))}
-          </div>
-        ) : filteredNotes.length === 0 ? (
-          <div className="text-center py-16 px-4">
-            <div className="text-6xl mb-4" aria-hidden="true">
-              🎈
-            </div>
-            <h3 className="font-heading font-bold text-xl text-slate-700 mb-2">
-              Chưa tìm thấy lời chia sẻ nào phù hợp
-            </h3>
-            <p className="text-slate-500 text-sm mb-6">
-              Hãy thử từ khóa khác hoặc trở thành gia đình đầu tiên viết cảm nghĩ cho chủ đề này nhé!
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              {(activeTopicFilter !== 'all' || searchQuery) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTopicFilter('all');
-                    setSearchQuery('');
-                  }}
-                  className="px-5 py-2.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
-                >
-                  Xem tất cả lưu bút
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => openPostModal()}
-                className="px-5 py-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
-              >
-                Gửi lưu bút ngay
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 items-start">
-            {filteredNotes.map((note, idx) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                index={idx}
-                localLikes={likedNotesMap[note.id] || 0}
-                canDelete={note.authorUid === guestUid}
-                onHeartClick={handleHeartClick}
-                onSelectNote={(n) => setSelectedNote(n)}
-                onOpenLightbox={(url, caption, e) => {
-                  e.stopPropagation();
-                  setLightboxPhoto({ url, caption });
-                }}
-                onDeleteNote={handleDeleteNote}
-              />
-            ))}
-          </div>
-        )}
       </main>
 
       {/* FLOATING ACTION BUTTON FOR MOBILE */}
