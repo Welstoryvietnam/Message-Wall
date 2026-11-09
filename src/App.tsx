@@ -21,8 +21,8 @@ import {
   Image as ImageIcon,
   MessageCircleHeart,
   Sparkles,
-  Camera,
   ChevronDown,
+  ArrowUp,
 } from 'lucide-react';
 import {
   db,
@@ -38,17 +38,18 @@ import {
   TOPICS,
   NOTE_COLORS,
   PROMPT_SUGGESTIONS,
-  PRESET_EVENT_PHOTOS,
   PromptSuggestion,
 } from './types';
 import { FAMILY_ICONS } from './components/FamilyIcons';
 import { NoteCard } from './components/NoteCard';
 import { NoteDetailModal } from './components/NoteDetailModal';
 import {
+  BTC_WELCOME_NOTE_ID,
   compressImageFile,
   getLikedNoteIds,
   getOrCreateGuestUid,
   INITIAL_SEED_NOTES,
+  LEGACY_SEED_NOTE_IDS,
   markNoteLikedLocally,
   triggerCelebrationConfetti,
   triggerHeartConfetti,
@@ -101,6 +102,7 @@ export default function App() {
   const [activeTopicFilter, setActiveTopicFilter] = useState<TopicId | 'all'>('all');
   const [isTopicListOpen, setIsTopicListOpen] = useState<boolean>(false);
   const [selectedNote, setSelectedNote] = useState<MemoryNote | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
   const topicDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -122,13 +124,23 @@ export default function App() {
     const unsubscribe = onSnapshot(
       q,
       async (snapshot) => {
-        const hasBtcWelcome = snapshot.docs.some((d) => d.id === 'seed_btc_welcome_2026');
+        // Always purge any legacy seed notes if they exist in the database
+        const legacyDocs = snapshot.docs.filter((d) => LEGACY_SEED_NOTE_IDS.includes(d.id));
+        if (legacyDocs.length > 0) {
+          await Promise.allSettled(
+            legacyDocs.map((d) => deleteDoc(doc(db, notesPath, d.id)))
+          );
+        }
+
+        const hasBtcWelcome = snapshot.docs.some((d) => d.id === BTC_WELCOME_NOTE_ID);
         if (!hasBtcWelcome && !hasSeededRef.current) {
           hasSeededRef.current = true;
           try {
-            for (const existingDoc of snapshot.docs) {
-              await deleteDoc(doc(db, notesPath, existingDoc.id));
-            }
+            await Promise.allSettled(
+              snapshot.docs
+                .filter((d) => d.id !== BTC_WELCOME_NOTE_ID)
+                .map((existingDoc) => deleteDoc(doc(db, notesPath, existingDoc.id)))
+            );
 
             const authorId = getOrCreateGuestUid();
 
@@ -162,6 +174,9 @@ export default function App() {
         let hasNewRemoteNote = false;
 
         snapshot.forEach((docSnap) => {
+          if (LEGACY_SEED_NOTE_IDS.includes(docSnap.id)) {
+            return;
+          }
           const data = docSnap.data();
           const item: MemoryNote = {
             id: docSnap.id,
@@ -229,6 +244,20 @@ export default function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isTopicListOpen]);
+
+  // Show "Back to top" button when scrolling down past 500px
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 500);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Open modal and focus input
   const openPostModal = (suggestion?: PromptSuggestion) => {
@@ -736,15 +765,32 @@ export default function App() {
         )}
       </main>
 
-      {/* FLOATING ACTION BUTTON FOR MOBILE */}
-      <button
-        type="button"
-        onClick={() => openPostModal()}
-        className="md:hidden fixed bottom-6 right-6 z-30 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white p-4 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center active:scale-90 transition-transform"
-        aria-label="Viết chia sẻ"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {/* FLOATING ACTION BUTTONS (BACK TO TOP & MOBILE POST) */}
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
+        <button
+          type="button"
+          onClick={scrollToTop}
+          title="Lên đầu trang"
+          aria-label="Lên đầu trang"
+          className={`inline-flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-white/95 hover:bg-orange-50 text-[#EA5514] border-2 border-orange-200 shadow-lg shadow-orange-500/15 font-heading font-bold text-xs sm:text-sm transition-all duration-300 cursor-pointer active:scale-95 ${
+            showBackToTop
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-4 pointer-events-none'
+          }`}
+        >
+          <ArrowUp className="w-4 h-4 shrink-0" />
+          <span>Lên đầu trang</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openPostModal()}
+          className="md:hidden bg-gradient-to-r from-[#EA5514] to-orange-500 text-white p-4 rounded-full shadow-xl shadow-orange-500/40 flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
+          aria-label="Viết chia sẻ"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
 
       {/* ================= MODAL GỬI LỜI CHIA SẺ ================= */}
       {isPostModalOpen && (
@@ -934,25 +980,6 @@ export default function App() {
                       Xóa ảnh
                     </button>
                   )}
-                </div>
-
-                {/* Preset Event Photos for quick test */}
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {PRESET_EVENT_PHOTOS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => {
-                        setPhotoData(preset.url);
-                        setPhotoCaption(preset.defaultCaption);
-                        setPhotoFileName(preset.label);
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-orange-50 text-[11px] font-medium text-slate-600 hover:text-orange-700 transition-colors cursor-pointer"
-                    >
-                      <Camera className="w-3 h-3" />
-                      <span>{preset.label}</span>
-                    </button>
-                  ))}
                 </div>
 
                 {photoData && (

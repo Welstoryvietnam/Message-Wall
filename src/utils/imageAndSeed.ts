@@ -168,9 +168,19 @@ export interface SeedNotePayload {
   photoCaption: string;
 }
 
+export const BTC_WELCOME_NOTE_ID = 'seed_btc_welcome_v2_2026';
+
+export const LEGACY_SEED_NOTE_IDS: string[] = [
+  'seed_note_bento_01',
+  'seed_note_letter_02',
+  'seed_note_family_03',
+  'seed_note_wish_04',
+  'seed_btc_welcome_2026',
+];
+
 export const INITIAL_SEED_NOTES: SeedNotePayload[] = [
   {
-    id: 'seed_btc_welcome_2026',
+    id: BTC_WELCOME_NOTE_ID,
     parentName: 'Ban Tổ Chức',
     childName: "Welstory Kids' Day 2026",
     department: 'Ban Tổ Chức Sự Kiện',
@@ -184,4 +194,5 @@ export const INITIAL_SEED_NOTES: SeedNotePayload[] = [
     photoCaption: '',
   },
 ];
+
 
