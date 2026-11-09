@@ -22,6 +22,7 @@ import {
   MessageCircleHeart,
   Sparkles,
   Camera,
+  ChevronDown,
 } from 'lucide-react';
 import {
   db,
@@ -98,7 +99,9 @@ export default function App() {
 
   // Filter & Wall controls
   const [activeTopicFilter, setActiveTopicFilter] = useState<TopicId | 'all'>('all');
+  const [isTopicListOpen, setIsTopicListOpen] = useState<boolean>(false);
   const [selectedNote, setSelectedNote] = useState<MemoryNote | null>(null);
+  const topicDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const authorInputRef = useRef<HTMLInputElement | null>(null);
@@ -206,6 +209,21 @@ export default function App() {
       setSelectedNote(updated);
     }
   }, [notes, selectedNote?.id]);
+
+  // Close topic shortlist dropdown when clicking outside
+  useEffect(() => {
+    if (!isTopicListOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        topicDropdownRef.current &&
+        !topicDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsTopicListOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isTopicListOpen]);
 
   // Open modal and focus input
   const openPostModal = (suggestion?: PromptSuggestion) => {
@@ -500,180 +518,211 @@ export default function App() {
         </div>
       </header>
 
-      {/* ================= MAIN CONTENT: LEFT TOPIC LIST + RIGHT MESSAGE WALL ================= */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 flex-grow pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-          {/* Left Panel: Stats & Vertical Topic List (dạng list) */}
-          <aside className="lg:col-span-3 lg:sticky lg:top-6 bg-white/95 backdrop-blur-md border border-orange-100 rounded-3xl p-4 sm:p-5 shadow-xs space-y-5">
-            {/* Stats Summary */}
-            <div className="grid grid-cols-2 gap-3 pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#EA5514] flex items-center justify-center shrink-0">
-                  <MessageCircleHeart className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-slate-500 font-medium">Lời chia sẻ</p>
-                  <p className="font-heading font-extrabold text-base text-slate-800 leading-none font-mono-num mt-0.5">
-                    {metrics.totalNotes}
-                  </p>
-                </div>
+      {/* ================= TOOLBAR & COLLAPSIBLE TOPIC SHORTLIST ================= */}
+      <section className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-6 mb-8 relative z-20">
+        <div className="bg-white/95 backdrop-blur-md border border-orange-100 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Stats & Online Sync Status */}
+          <div className="flex items-center gap-5 w-full sm:w-auto justify-center sm:justify-start border-b sm:border-b-0 pb-3 sm:pb-0 border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#EA5514] flex items-center justify-center shrink-0">
+                <MessageCircleHeart className="w-5 h-5" />
               </div>
-
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center shrink-0">
-                  <Heart className="w-4 h-4 fill-rose-500" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-slate-500 font-medium">Lượt thả tim</p>
-                  <p className="font-heading font-extrabold text-base text-slate-800 leading-none font-mono-num mt-0.5">
-                    {metrics.totalHearts}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Vertical Topic List */}
-            <div>
-              <div className="flex items-center justify-between mb-2.5 px-1">
-                <h2 className="text-xs font-heading font-bold text-slate-500 uppercase tracking-wider">
-                  Chủ đề lưu bút
-                </h2>
-                <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
-                  Trực tuyến
-                </span>
-              </div>
-
-              <ul className="flex flex-col gap-1.5" role="list">
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTopicFilter('all')}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer ${
-                      activeTopicFilter === 'all'
-                        ? 'bg-slate-800 text-white shadow-xs'
-                        : 'bg-slate-50 hover:bg-orange-50 text-slate-700'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span>🌟</span>
-                      <span>Tất cả</span>
-                    </span>
-                    <span
-                      className={`text-xs font-mono-num px-2 py-0.5 rounded-lg ${
-                        activeTopicFilter === 'all'
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-200/70 text-slate-600'
-                      }`}
-                    >
-                      {metrics.countsByTopic.all || 0}
-                    </span>
-                  </button>
-                </li>
-
-                {TOPICS.map((t) => {
-                  const isActive = activeTopicFilter === t.id;
-                  return (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTopicFilter(t.id)}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-slate-800 text-white shadow-xs'
-                            : 'bg-slate-50 hover:bg-orange-50 text-slate-700'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <span>{t.emoji}</span>
-                          <span>{t.label}</span>
-                        </span>
-                        <span
-                          className={`text-xs font-mono-num px-2 py-0.5 rounded-lg ${
-                            isActive
-                              ? 'bg-white/20 text-white'
-                              : 'bg-slate-200/70 text-slate-600'
-                          }`}
-                        >
-                          {metrics.countsByTopic[t.id] || 0}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </aside>
-
-          {/* Right Panel: Sticky-Note Message Wall Grid */}
-          <div className="lg:col-span-9">
-            {isLoadingNotes ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                {[1, 2, 3].map((n) => (
-                  <div
-                    key={n}
-                    className="h-64 rounded-3xl border-2 border-amber-200 bg-amber-50/60 p-6 animate-pulse flex flex-col justify-between"
-                  >
-                    <div className="space-y-3">
-                      <div className="h-10 w-2/3 bg-amber-200/60 rounded-2xl" />
-                      <div className="h-4 w-1/3 bg-amber-200/60 rounded-lg" />
-                      <div className="h-20 w-full bg-amber-200/50 rounded-xl" />
-                    </div>
-                    <div className="h-6 w-full bg-amber-200/50 rounded-lg" />
-                  </div>
-                ))}
-              </div>
-            ) : filteredNotes.length === 0 ? (
-              <div className="bg-white/80 border border-orange-100 rounded-3xl text-center py-16 px-4">
-                <div className="text-6xl mb-4" aria-hidden="true">
-                  🎈
-                </div>
-                <h3 className="font-heading font-bold text-xl text-slate-700 mb-2">
-                  Chưa có lời chia sẻ nào trong chủ đề này
-                </h3>
-                <p className="text-slate-500 text-sm mb-6">
-                  Hãy trở thành gia đình đầu tiên viết cảm nghĩ cho chủ đề này nhé!
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Lời chia sẻ</p>
+                <p className="font-heading font-extrabold text-lg text-slate-800 leading-none font-mono-num">
+                  {metrics.totalNotes}
                 </p>
-                <div className="flex items-center justify-center gap-3">
-                  {activeTopicFilter !== 'all' && (
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-slate-200" />
+
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center shrink-0">
+                <Heart className="w-5 h-5 fill-rose-500" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Lượt thả tim</p>
+                <p className="font-heading font-extrabold text-lg text-slate-800 leading-none font-mono-num">
+                  {metrics.totalHearts}
+                </p>
+              </div>
+            </div>
+
+            <div className="hidden md:block h-8 w-px bg-slate-200" />
+
+            <div className="hidden md:flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200/60">
+              <span>Đồng bộ trực tuyến</span>
+            </div>
+          </div>
+
+          {/* Clickable Topic Shortlist Dropdown */}
+          <div ref={topicDropdownRef} className="relative w-full sm:w-72">
+            <button
+              type="button"
+              onClick={() => setIsTopicListOpen((prev) => !prev)}
+              aria-expanded={isTopicListOpen}
+              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-slate-50 hover:bg-orange-50/80 border border-slate-200 hover:border-orange-200 text-slate-800 font-heading font-bold text-xs sm:text-sm transition-all cursor-pointer"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <span className="text-slate-500 font-semibold">Chủ đề lưu bút:</span>
+                {activeTopicFilter === 'all' ? (
+                  <span className="text-[#EA5514] truncate">🌟 Tất cả</span>
+                ) : (
+                  <span className="text-[#EA5514] truncate">
+                    {TOPICS.find((t) => t.id === activeTopicFilter)?.emoji}{' '}
+                    {TOPICS.find((t) => t.id === activeTopicFilter)?.label}
+                  </span>
+                )}
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200 ${
+                  isTopicListOpen ? 'rotate-180 text-[#EA5514]' : ''
+                }`}
+              />
+            </button>
+
+            {/* Dropdown List shown only when clicked */}
+            {isTopicListOpen && (
+              <div className="absolute right-0 left-0 mt-2 bg-white rounded-2xl shadow-xl border border-orange-100 p-2 z-30">
+                <ul className="flex flex-col gap-1" role="listbox">
+                  <li>
                     <button
                       type="button"
-                      onClick={() => setActiveTopicFilter('all')}
-                      className="px-5 py-2.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+                      onClick={() => {
+                        setActiveTopicFilter('all');
+                        setIsTopicListOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer ${
+                        activeTopicFilter === 'all'
+                          ? 'bg-slate-800 text-white'
+                          : 'text-slate-700 hover:bg-orange-50'
+                      }`}
                     >
-                      Xem tất cả lưu bút
+                      <span className="flex items-center gap-2">
+                        <span>🌟</span>
+                        <span>Tất cả</span>
+                      </span>
+                      <span
+                        className={`text-xs font-mono-num px-2 py-0.5 rounded-lg ${
+                          activeTopicFilter === 'all'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {metrics.countsByTopic.all || 0}
+                      </span>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => openPostModal()}
-                    className="px-5 py-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
-                  >
-                    Gửi lưu bút ngay
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                {filteredNotes.map((note, idx) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    index={idx}
-                    localLikes={likedNotesMap[note.id] || 0}
-                    canDelete={note.authorUid === guestUid}
-                    onHeartClick={handleHeartClick}
-                    onSelectNote={(n) => setSelectedNote(n)}
-                    onOpenLightbox={(url, caption, e) => {
-                      e.stopPropagation();
-                      setLightboxPhoto({ url, caption });
-                    }}
-                    onDeleteNote={handleDeleteNote}
-                  />
-                ))}
+                  </li>
+
+                  {TOPICS.map((t) => {
+                    const isActive = activeTopicFilter === t.id;
+                    return (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTopicFilter(t.id);
+                            setIsTopicListOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-slate-800 text-white'
+                              : 'text-slate-700 hover:bg-orange-50'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{t.emoji}</span>
+                            <span>{t.label}</span>
+                          </span>
+                          <span
+                            className={`text-xs font-mono-num px-2 py-0.5 rounded-lg ${
+                              isActive
+                                ? 'bg-white/20 text-white'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {metrics.countsByTopic[t.id] || 0}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
           </div>
         </div>
+      </section>
+
+      {/* ================= MESSAGE WALL GRID (BẢNG LƯU BÚT) ================= */}
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 flex-grow pb-16">
+        {isLoadingNotes ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 items-start">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="h-64 rounded-3xl border-2 border-amber-200 bg-amber-50/60 p-6 animate-pulse flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="h-10 w-2/3 bg-amber-200/60 rounded-2xl" />
+                  <div className="h-4 w-1/3 bg-amber-200/60 rounded-lg" />
+                  <div className="h-20 w-full bg-amber-200/50 rounded-xl" />
+                </div>
+                <div className="h-6 w-full bg-amber-200/50 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        ) : filteredNotes.length === 0 ? (
+          <div className="bg-white/80 border border-orange-100 rounded-3xl text-center py-16 px-4">
+            <div className="text-6xl mb-4" aria-hidden="true">
+              🎈
+            </div>
+            <h3 className="font-heading font-bold text-xl text-slate-700 mb-2">
+              Chưa có lời chia sẻ nào trong chủ đề này
+            </h3>
+            <p className="text-slate-500 text-sm mb-6">
+              Hãy trở thành gia đình đầu tiên viết cảm nghĩ cho chủ đề này nhé!
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              {activeTopicFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTopicFilter('all')}
+                  className="px-5 py-2.5 bg-orange-100 hover:bg-orange-200 text-orange-700 font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+                >
+                  Xem tất cả lưu bút
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openPostModal()}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#EA5514] to-orange-500 text-white font-heading font-bold rounded-xl text-sm transition-all cursor-pointer"
+              >
+                Gửi lưu bút ngay
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7 items-start">
+            {filteredNotes.map((note, idx) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                index={idx}
+                localLikes={likedNotesMap[note.id] || 0}
+                canDelete={note.authorUid === guestUid}
+                onHeartClick={handleHeartClick}
+                onSelectNote={(n) => setSelectedNote(n)}
+                onOpenLightbox={(url, caption, e) => {
+                  e.stopPropagation();
+                  setLightboxPhoto({ url, caption });
+                }}
+                onDeleteNote={handleDeleteNote}
+              />
+            ))}
+          </div>
+        )}
       </main>
 
       {/* FLOATING ACTION BUTTON FOR MOBILE */}
@@ -705,9 +754,6 @@ export default function App() {
                   <h2 className="font-heading font-bold text-xl text-slate-800">
                     Gửi Lưu Bút Kids&apos; Day 2026
                   </h2>
-                  <p className="text-xs text-slate-500">
-                    Chia sẻ niềm vui cùng đại gia đình Welstory (Không cần đăng nhập)
-                  </p>
                 </div>
               </div>
               <button
