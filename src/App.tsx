@@ -38,7 +38,6 @@ import {
   TOPICS,
   NOTE_COLORS,
   PROMPT_SUGGESTIONS,
-  DEPARTMENTS,
   PRESET_EVENT_PHOTOS,
   PromptSuggestion,
 } from './types';
@@ -122,9 +121,14 @@ export default function App() {
     const unsubscribe = onSnapshot(
       q,
       async (snapshot) => {
-        if (snapshot.empty && !hasSeededRef.current) {
+        const hasBtcWelcome = snapshot.docs.some((d) => d.id === 'seed_btc_welcome_2026');
+        if (!hasBtcWelcome && !hasSeededRef.current) {
           hasSeededRef.current = true;
           try {
+            for (const existingDoc of snapshot.docs) {
+              await deleteDoc(doc(db, notesPath, existingDoc.id));
+            }
+
             const authorId = getOrCreateGuestUid();
 
             for (const seed of INITIAL_SEED_NOTES) {
@@ -805,19 +809,13 @@ export default function App() {
                 </label>
                 <input
                   type="text"
-                  list="welstory-dept-list"
                   required
                   maxLength={VALIDATION_LIMITS.DEPARTMENT_MAX}
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="VD: Phòng Hành chính Nhân sự (HR)"
+                  placeholder="Nhập phòng ban / bộ phận của bạn..."
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#EA5514]/40 focus:border-[#EA5514]"
                 />
-                <datalist id="welstory-dept-list">
-                  {DEPARTMENTS.map((d) => (
-                    <option key={d} value={d} />
-                  ))}
-                </datalist>
               </div>
 
               {/* Row 3: Topic & Family Avatar */}

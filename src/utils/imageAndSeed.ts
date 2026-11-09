@@ -146,59 +146,18 @@ export interface SeedNotePayload {
 
 export const INITIAL_SEED_NOTES: SeedNotePayload[] = [
   {
-    id: 'seed_note_bento_01',
-    parentName: 'Nguyễn Minh Tuấn',
-    childName: 'Bé Bảo An (6 tuổi)',
-    department: 'Vận hành Bếp Trung Tâm',
+    id: 'seed_btc_welcome_2026',
+    parentName: 'Ban Tổ Chức',
+    childName: "Welstory Kids' Day 2026",
+    department: 'Ban Tổ Chức Sự Kiện',
     familyIcon: 'chef-family',
     noteColor: 'butter',
     topic: 'ky-niem-dep',
-    promptUsed: 'Khoảnh khắc nào tại Welstory Kids Day 2026 làm cả gia đình mình bật cười hạnh phúc nhất?',
+    promptUsed: '',
     message:
-      'Lần đầu tiên Bảo An được đội chiếc mũ đầu bếp giống bố và tự tay xếp từng ngôi sao cà rốt vào hộp cơm Bento. Con cứ xuýt xoa "Hóa ra mỗi ngày bố đều làm ra những suất ăn đẹp như thế này ạ!". Khoảnh khắc hai bố con cùng cười bên bàn bếp là kỷ niệm đẹp nhất của gia đình mình năm nay.',
-    photoData: '/src/assets/images/memory_cooking_class_1794212239072.jpg',
-    photoCaption: 'Hai bố con hào hứng trang trí hộp cơm Bento dinh dưỡng tại Welstory Kids Day 2026',
-  },
-  {
-    id: 'seed_note_letter_02',
-    parentName: 'Trần Thu Hà',
-    childName: 'Bé Gia Huy (5 tuổi)',
-    department: 'Kiểm soát Chất lượng (QA/QC)',
-    familyIcon: 'heart-hands',
-    noteColor: 'rose',
-    topic: 'loi-con-noi',
-    promptUsed: 'Khi lần đầu đến thăm nơi làm việc của Bố/Mẹ, bé đã thốt lên câu nói ngộ nghĩnh gì?',
-    message:
-      'Lúc ngồi ở góc vẽ tranh, Gia Huy nắn nót viết dòng chữ "Con yêu mẹ Hà" lên tấm thiệp hồng rồi thủ thỉ: "Mẹ ơi, công ty mẹ vui quá, mai mốt lớn lên con cũng muốn đi kiểm tra đồ ăn ngon cùng mẹ để mọi người đều khỏe mạnh!". Nghe con nói mà bao nhiêu mệt mỏi tan biến hết.',
-    photoData: '/src/assets/images/memory_painting_corner_1794212242616.jpg',
-    photoCaption: 'Mẹ Hà và bé Gia Huy cùng viết thiệp yêu thương tại góc sáng tạo',
-  },
-  {
-    id: 'seed_note_family_03',
-    parentName: 'Lê Hoàng Nam & Phạm Lan Anh',
-    childName: 'Bé Minh Khôi & Bé Sóc',
-    department: 'Chuỗi Cung ứng & Thu mua',
-    familyIcon: 'sunshine-home',
-    noteColor: 'mint',
-    topic: 'cam-on-btc',
-    promptUsed: 'Gia đình mình ấn tượng nhất với hoạt động nào và muốn gửi lời cảm ơn gì tới Ban Tổ Chức?',
-    message:
-      'Gia đình mình xin gửi lời cảm ơn chân thành đến Ban Giám Đốc và Ban Tổ Chức Welstory Kids Day 2026. Từ khu vực đón tiếp, góc trải nghiệm làm bếp đến những phần quà nhỏ đều được chuẩn bị vô cùng tỉ mỉ, ấm cúng và an toàn cho các bé. Hẹn gặp lại đại gia đình Welstory vào mùa hội năm sau!',
-    photoData: '/src/assets/images/memory_family_stage_1794212241701.jpg',
-    photoCaption: 'Cả nhà rạng rỡ lưu giữ khoảnh khắc sum vầy tại sảnh chính sự kiện',
-  },
-  {
-    id: 'seed_note_wish_04',
-    parentName: 'Đỗ Phương Thảo',
-    childName: 'Bé Mầm (4 tuổi)',
-    department: 'Nghiên cứu Thực đơn (R&D)',
-    familyIcon: 'star-sprout',
-    noteColor: 'sky',
-    topic: 'loi-nhan-vien',
-    promptUsed: 'Bố/Mẹ muốn nhắn gửi lời chúc hay ước mong gì cho hành trình khôn lớn của con yêu?',
-    message:
-      'Hôm nay đưa con đến thăm nơi mẹ làm việc mỗi ngày, nhìn ánh mắt tò mò và nụ cười trong veo của con khi gặp các cô chú đồng nghiệp, mẹ thấy thật tự hào. Mẹ chúc em bé Mầm của mẹ luôn giữ trái tim ấm áp, hay ăn chóng lớn và mỗi ngày đều tràn ngập niềm vui như ngày hội hôm nay nhé!',
+      "Chào mừng đại gia đình Welstory đến với Bảng Lưu Bút Yêu Thương - Welstory Kids' Day 2026! Những tiếng cười giòn tan và ánh mắt rạng rỡ của các thiên thần nhỏ là món quà tuyệt vời nhất. Bố mẹ và các bé hãy cùng ghim lên tường những kỷ niệm đẹp, những câu nói ngộ nghĩnh đáng yêu và cảm xúc sau ngày hội hôm nay nhé!",
     photoData: '',
     photoCaption: '',
   },
 ];
+
