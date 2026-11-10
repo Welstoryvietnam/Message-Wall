@@ -24,6 +24,9 @@ import {
   ChevronDown,
   ArrowUp,
   Share2,
+  Music,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import {
   db,
@@ -45,6 +48,7 @@ import { FAMILY_ICONS } from './components/FamilyIcons';
 import { NoteCard } from './components/NoteCard';
 import { NoteDetailModal } from './components/NoteDetailModal';
 import { SocialShareModal } from './components/SocialShareModal';
+import { bgmPlayer } from './utils/bgmPlayer';
 import {
   BTC_WELCOME_NOTE_ID,
   compressImageFile,
@@ -108,6 +112,7 @@ export default function App() {
   const [selectedNote, setSelectedNote] = useState<MemoryNote | null>(null);
   const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [isBgmPlaying, setIsBgmPlaying] = useState<boolean>(false);
   const [shareData, setShareData] = useState<{
     title: string;
     text: string;
@@ -121,6 +126,16 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const authorInputRef = useRef<HTMLInputElement | null>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const toggleBgm = () => {
+    const playing = bgmPlayer.toggle();
+    setIsBgmPlaying(playing);
+    if (playing) {
+      showToast('🎵 Đang phát bài hát: "Khát Vọng Welstory"');
+    } else {
+      showToast('🔇 Đã tắt bài hát nền');
+    }
+  };
 
   const openShareModal = (note?: MemoryNote) => {
     if (note) {
@@ -281,6 +296,13 @@ export default function App() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-play background music on load/first interaction (runs continuously until user clicks mute/off)
+  useEffect(() => {
+    bgmPlayer.setupAutoPlayOnInteraction((playing) => {
+      setIsBgmPlaying(playing);
+    });
   }, []);
 
   const scrollToTop = () => {
@@ -546,6 +568,30 @@ export default function App() {
               <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#EA5514] shrink-0" />
               <span className="hidden xs:inline sm:inline">Chia sẻ</span>
             </button>
+
+            <button
+              type="button"
+              onClick={toggleBgm}
+              title={isBgmPlaying ? 'Tắt nhạc nền' : 'Bật nhạc nền vui tươi'}
+              aria-label={isBgmPlaying ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+              className={`inline-flex items-center justify-center gap-1.5 font-heading font-bold text-xs sm:text-sm px-3 py-2.5 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl border transition-all active:scale-95 whitespace-nowrap cursor-pointer ${
+                isBgmPlaying
+                  ? 'bg-amber-100/90 border-amber-300 text-amber-900 shadow-sm shadow-amber-300/40 animate-pulse'
+                  : 'bg-white hover:bg-orange-50 border-orange-200 text-slate-700 hover:text-[#EA5514]'
+              }`}
+            >
+              {isBgmPlaying ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#EA5514] shrink-0" />
+                  <span className="hidden sm:inline">Nhạc: Bật</span>
+                </>
+              ) : (
+                <>
+                  <Music className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
+                  <span className="hidden sm:inline">Nhạc nền</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Question Prompts Box on Top of Page */}
@@ -804,8 +850,33 @@ export default function App() {
         )}
       </main>
 
-      {/* FLOATING ACTION BUTTONS (BACK TO TOP & MOBILE POST) */}
+      {/* FLOATING ACTION BUTTONS (MUSIC, BACK TO TOP & MOBILE POST) */}
       <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
+        {/* Floating Music Button */}
+        <button
+          type="button"
+          onClick={toggleBgm}
+          title={isBgmPlaying ? 'Tắt nhạc nền' : 'Bật nhạc nền vui tươi'}
+          aria-label={isBgmPlaying ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+          className={`inline-flex items-center justify-center p-3 sm:px-4 sm:py-2.5 rounded-2xl border-2 shadow-lg transition-all duration-300 cursor-pointer active:scale-95 ${
+            isBgmPlaying
+              ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-amber-300/40 animate-pulse'
+              : 'bg-white/95 hover:bg-orange-50 border-orange-200 text-slate-700 hover:text-[#EA5514] shadow-orange-500/10'
+          }`}
+        >
+          {isBgmPlaying ? (
+            <div className="flex items-center gap-1.5 font-heading font-bold text-xs sm:text-sm text-[#EA5514]">
+              <Volume2 className="w-4 h-4 shrink-0 animate-bounce" />
+              <span className="hidden sm:inline">Tắt nhạc</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 font-heading font-bold text-xs sm:text-sm">
+              <Music className="w-4 h-4 text-slate-600 shrink-0" />
+              <span className="hidden sm:inline">Bật nhạc</span>
+            </div>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={scrollToTop}
