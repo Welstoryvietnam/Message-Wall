@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, Clock, Building2, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Heart, Clock, Building2, Trash2, Image as ImageIcon, Share2 } from 'lucide-react';
 import { MemoryNote, NOTE_COLORS, TOPICS } from '../types';
 import { FamilyEmblemSvg } from './FamilyIcons';
 
@@ -12,6 +12,7 @@ interface NoteCardProps {
   onSelectNote: (note: MemoryNote) => void;
   onOpenLightbox: (imgUrl: string, caption: string, e: React.MouseEvent) => void;
   onDeleteNote?: (noteId: string, e: React.MouseEvent) => void;
+  onShareNote?: (note: MemoryNote) => void;
 }
 
 export function formatRelativeTime(timestamp: MemoryNote['createdAt']): string {
@@ -41,6 +42,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
   onSelectNote,
   onOpenLightbox,
   onDeleteNote,
+  onShareNote,
 }) => {
   const [imgError, setImgError] = useState(false);
   const [heartAnim, setHeartAnim] = useState(false);
@@ -146,7 +148,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({
           <span>{formatRelativeTime(note.createdAt)}</span>
         </span>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {canDelete && onDeleteNote && (
             <button
               type="button"
@@ -155,6 +157,21 @@ export const NoteCard: React.FC<NoteCardProps> = ({
               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {onShareNote && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShareNote(note);
+              }}
+              title="Chia sẻ Facebook / Instagram"
+              aria-label="Chia sẻ lưu bút"
+              className="p-1.5 rounded-xl border border-slate-200/80 bg-white/85 text-slate-500 hover:text-[#EA5514] hover:border-orange-200 hover:bg-orange-50 transition-all active:scale-90"
+            >
+              <Share2 className="w-3.5 h-3.5" />
             </button>
           )}
 

@@ -23,6 +23,7 @@ import {
   Sparkles,
   ChevronDown,
   ArrowUp,
+  Share2,
 } from 'lucide-react';
 import {
   db,
@@ -43,6 +44,7 @@ import {
 import { FAMILY_ICONS } from './components/FamilyIcons';
 import { NoteCard } from './components/NoteCard';
 import { NoteDetailModal } from './components/NoteDetailModal';
+import { SocialShareModal } from './components/SocialShareModal';
 import {
   BTC_WELCOME_NOTE_ID,
   compressImageFile,
@@ -53,6 +55,8 @@ import {
   markNoteLikedLocally,
   triggerCelebrationConfetti,
   triggerHeartConfetti,
+  shareOnFacebook,
+  shareOnInstagram,
 } from './utils/imageAndSeed';
 
 export default function App() {
@@ -103,11 +107,35 @@ export default function App() {
   const [isTopicListOpen, setIsTopicListOpen] = useState<boolean>(false);
   const [selectedNote, setSelectedNote] = useState<MemoryNote | null>(null);
   const [showBackToTop, setShowBackToTop] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [shareData, setShareData] = useState<{
+    title: string;
+    text: string;
+    url?: string;
+  }>({
+    title: "Bảng Lưu Bút Yêu Thương - Welstory Kids' Day 2026",
+    text: "Cùng xem và gửi lời chúc, kỷ niệm đẹp tại Bảng Lưu Bút Welstory Kids' Day 2026!",
+  });
   const topicDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const authorInputRef = useRef<HTMLInputElement | null>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const openShareModal = (note?: MemoryNote) => {
+    if (note) {
+      setShareData({
+        title: `Lưu bút của gia đình ${note.parentName} & ${note.childName}`,
+        text: `“${note.message}” — Lời chia sẻ từ gia đình ${note.parentName} & ${note.childName} (${note.department}) tại Welstory Kids' Day 2026!`,
+      });
+    } else {
+      setShareData({
+        title: "Bảng Lưu Bút Yêu Thương - Welstory Kids' Day 2026",
+        text: "Chào mừng bạn đến với Bảng Lưu Bút Yêu Thương Welstory Kids' Day 2026! Cùng ghim những kỷ niệm đẹp và lời chúc ngọt ngào nhé.",
+      });
+    }
+    setIsShareModalOpen(true);
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -508,6 +536,16 @@ export default function App() {
               <Lightbulb className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200 shrink-0" />
               <span>Gợi ý viết cảm nghĩ</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => openShareModal()}
+              title="Chia sẻ lên Facebook / Instagram"
+              className="inline-flex items-center justify-center gap-1.5 bg-white hover:bg-orange-50 text-slate-700 hover:text-[#EA5514] border border-orange-200 font-heading font-bold text-xs sm:text-sm px-3 py-2.5 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl shadow-sm hover:shadow transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#EA5514] shrink-0" />
+              <span className="hidden xs:inline sm:inline">Chia sẻ</span>
+            </button>
           </div>
 
           {/* Question Prompts Box on Top of Page */}
@@ -759,6 +797,7 @@ export default function App() {
                   setLightboxPhoto({ url, caption });
                 }}
                 onDeleteNote={handleDeleteNote}
+                onShareNote={(n) => openShareModal(n)}
               />
             ))}
           </div>
@@ -1069,6 +1108,17 @@ export default function App() {
         localLikes={selectedNote ? likedNotesMap[selectedNote.id] || 0 : 0}
         onClose={() => setSelectedNote(null)}
         onHeartClick={handleHeartClick}
+        onShareNote={(n) => openShareModal(n)}
+      />
+
+      {/* ================= MODAL CHIA SẺ FACEBOOK & INSTAGRAM ================= */}
+      <SocialShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        title={shareData.title}
+        shareText={shareData.text}
+        shareUrl={shareData.url}
+        onNotify={showToast}
       />
 
       {/* ================= TOAST THÔNG BÁO ================= */}

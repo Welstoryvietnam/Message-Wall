@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Heart, MessageSquareQuote, Image as ImageIcon } from 'lucide-react';
+import { X, Heart, MessageSquareQuote, Image as ImageIcon, Share2 } from 'lucide-react';
 import { MemoryNote, NOTE_COLORS, TOPICS } from '../types';
 import { FamilyEmblemSvg, FAMILY_ICONS } from './FamilyIcons';
 import { formatRelativeTime } from './NoteCard';
@@ -9,6 +9,7 @@ interface NoteDetailModalProps {
   localLikes: number;
   onClose: () => void;
   onHeartClick: (noteId: string, e: React.MouseEvent) => void;
+  onShareNote?: (note: MemoryNote) => void;
 }
 
 export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
@@ -16,6 +17,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
   localLikes,
   onClose,
   onHeartClick,
+  onShareNote,
 }) => {
   const [imgError, setImgError] = useState(false);
 
@@ -131,6 +133,18 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
           </span>
 
           <div className="flex items-center gap-3">
+            {onShareNote && (
+              <button
+                type="button"
+                onClick={() => onShareNote(note)}
+                className="px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 bg-white text-slate-700 border border-slate-200 hover:bg-orange-50 hover:text-[#EA5514] hover:border-orange-200"
+                title="Chia sẻ Facebook / Instagram"
+              >
+                <Share2 className="w-4 h-4 text-[#EA5514]" />
+                <span className="hidden sm:inline">Chia sẻ</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={(e) => onHeartClick(note.id, e)}

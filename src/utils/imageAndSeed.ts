@@ -41,6 +41,42 @@ export function markNoteLikedLocally(noteId: string): void {
   }
 }
 
+export interface ShareDataPayload {
+  title?: string;
+  text?: string;
+  url?: string;
+}
+
+export function shareOnFacebook(url?: string): void {
+  const targetUrl = encodeURIComponent(
+    url || (typeof window !== 'undefined' ? window.location.href : 'https://welstory-kids-day.web.app')
+  );
+  const fbShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${targetUrl}`;
+  if (typeof window !== 'undefined') {
+    window.open(fbShareUrl, '_blank', 'noopener,noreferrer,width=620,height=600');
+  }
+}
+
+export function shareOnInstagram(customText?: string): { success: boolean; message: string } {
+  const shareText = customText || 'Welstory Kids Day 2026 - Bảng Lưu Bút Yêu Thương!';
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const fullContent = `${shareText}\n${shareUrl}`;
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(fullContent).catch(() => {});
+  }
+
+  // Open Instagram web or deep link
+  if (typeof window !== 'undefined') {
+    window.open('https://www.instagram.com/', '_blank', 'noopener,noreferrer');
+  }
+
+  return {
+    success: true,
+    message: 'Đã sao chép nội dung lưu bút! Đang mở Instagram để bạn chia sẻ Story / bài viết.',
+  };
+}
+
 export function triggerCelebrationConfetti(): void {
   if (
     typeof window !== 'undefined' &&
